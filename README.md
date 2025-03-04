@@ -2,6 +2,8 @@
 
 Aliyun NLS Capacitor Plugin
 
+🚧 目前不走这个方案了，代码还有问题，只作为代码保留
+
 ## Install
 
 ```bash
@@ -13,13 +15,18 @@ npx cap sync
 
 <docgen-index>
 
-* [`initialize(...)`](#initialize)
-* [`startRealTimeRecognition(...)`](#startrealtimerecognition)
-* [`stopRealTimeRecognition()`](#stoprealtimerecognition)
-* [`addListener('nlsEvent', ...)`](#addlistenernlsevent-)
-* [`addListener('nlsError', ...)`](#addlistenernlserror-)
-* [`removeAllListeners()`](#removealllisteners)
-* [Interfaces](#interfaces)
+- [capacitor-plugin-aliyun-nls](#capacitor-plugin-aliyun-nls)
+  - [Install](#install)
+  - [API](#api)
+    - [initialize(...)](#initialize)
+    - [startRealTimeRecognition(...)](#startrealtimerecognition)
+    - [stopRealTimeRecognition()](#stoprealtimerecognition)
+    - [addListener('nlsEvent', ...)](#addlistenernlsevent-)
+    - [addListener('nlsError', ...)](#addlistenernlserror-)
+    - [removeAllListeners()](#removealllisteners)
+    - [Interfaces](#interfaces)
+      - [AliyunNlsInitParams](#aliyunnlsinitparams)
+      - [PluginListenerHandle](#pluginlistenerhandle)
 
 </docgen-index>
 
