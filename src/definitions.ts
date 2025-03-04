@@ -1,10 +1,25 @@
 import { PluginListenerHandle } from '@capacitor/core';
 
+export interface AliyunNlsInitParams {
+  /**
+   * 申请的 appKey
+   */
+  appKey: string;
+  /**
+   * 鉴权 token
+   */
+  token: string;
+  /**
+   * 服务 URL，例如 "wss://nls-gateway.cn-shanghai.aliyuncs.com:443/ws/v1"
+   */
+  url: string;
+}
+
 export interface AliyunNlsPlugin {
   /**
    * 初始化 SDK，传入完整的 JSON 格式初始化参数（包含鉴权信息、服务 URL 等）
    */
-  initialize(options: { initParams: string }): Promise<void>;
+  initialize(options: { initParams: AliyunNlsInitParams }): Promise<void>;
 
   /**
    * 开始实时语音识别

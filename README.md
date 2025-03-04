@@ -29,14 +29,14 @@ npx cap sync
 ### initialize(...)
 
 ```typescript
-initialize(options: { initParams: string; }) => any
+initialize(options: { initParams: AliyunNlsInitParams; }) => any
 ```
 
 初始化 SDK，传入完整的 JSON 格式初始化参数（包含鉴权信息、服务 URL 等）
 
-| Param         | Type                                 |
-| ------------- | ------------------------------------ |
-| **`options`** | <code>{ initParams: string; }</code> |
+| Param         | Type                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------ |
+| **`options`** | <code>{ initParams: <a href="#aliyunnlsinitparams">AliyunNlsInitParams</a>; }</code> |
 
 **Returns:** <code>any</code>
 
@@ -123,6 +123,15 @@ removeAllListeners() => any
 
 
 ### Interfaces
+
+
+#### AliyunNlsInitParams
+
+| Prop         | Type                | Description                                                      |
+| ------------ | ------------------- | ---------------------------------------------------------------- |
+| **`appKey`** | <code>string</code> | 申请的 appKey                                                       |
+| **`token`**  | <code>string</code> | 鉴权 token                                                         |
+| **`url`**    | <code>string</code> | 服务 URL，例如 "wss://nls-gateway.cn-shanghai.aliyuncs.com:443/ws/v1" |
 
 
 #### PluginListenerHandle

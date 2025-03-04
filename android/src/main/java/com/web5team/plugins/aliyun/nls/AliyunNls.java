@@ -1,209 +1,783 @@
 package com.web5team.plugins.aliyun.nls;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.IntentSender;
+import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.res.AssetManager;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.database.DatabaseErrorHandler;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
+import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.UserHandle;
 import android.util.Log;
-import androidx.core.content.ContextCompat;
+import android.view.Display;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
+
+import com.alibaba.idst.nui.Constants;
 import com.alibaba.idst.nui.NativeNui;
 import com.alibaba.idst.nui.INativeNuiCallback;
-import com.alibaba.idst.nui.Constants;
 import com.alibaba.idst.nui.AsrResult;
 import com.alibaba.idst.nui.KwsResult;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
-/**
- * 此类封装了 Aliyun NLS SDK 的基本调用逻辑，参考了官方 SpeechTranscriberActivity 示例 :contentReference[oaicite:2]{index=2}，
- * 实现了 SDK 初始化、参数设置、音频录制及事件回调，并将识别事件通过自定义回调传递给上层。
- */
-public class AliyunNls implements INativeNuiCallback {
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
+/**
+ * 重构后的 AliyunNls 实现，修复鉴权参数缺失和线程安全问题
+ */
+public class AliyunNls extends Context implements INativeNuiCallback {
     private static final String TAG = "AliyunNls";
-    private NativeNui nuiInstance;
+    private final NativeNui nuiInstance;
+    private final Context context;
     private AudioRecord audioRecord;
-    private Context context;
-    private boolean isRecognizing = false;
-    private Thread audioThread;
-    private int sampleRate = 16000; // 默认采样率，可通过参数调整
-    private int minBufferSize;
+    private volatile boolean isRecognizing = false;
     private RecognitionCallback recognitionCallback;
-    private Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private String debugPath;
+
+    @Override
+    public AssetManager getAssets() {
+        return null;
+    }
+
+    @Override
+    public Resources getResources() {
+        return null;
+    }
+
+    @Override
+    public PackageManager getPackageManager() {
+        return null;
+    }
+
+    @Override
+    public ContentResolver getContentResolver() {
+        return null;
+    }
+
+    @Override
+    public Looper getMainLooper() {
+        return null;
+    }
+
+    @Override
+    public Context getApplicationContext() {
+        return null;
+    }
+
+    @Override
+    public void setTheme(int resid) {
+
+    }
+
+    @Override
+    public Resources.Theme getTheme() {
+        return null;
+    }
+
+    @Override
+    public ClassLoader getClassLoader() {
+        return null;
+    }
+
+    @Override
+    public String getPackageName() {
+        return "";
+    }
+
+    @Override
+    public ApplicationInfo getApplicationInfo() {
+        return null;
+    }
+
+    @Override
+    public String getPackageResourcePath() {
+        return "";
+    }
+
+    @Override
+    public String getPackageCodePath() {
+        return "";
+    }
+
+    @Override
+    public SharedPreferences getSharedPreferences(String name, int mode) {
+        return null;
+    }
+
+    @Override
+    public boolean moveSharedPreferencesFrom(Context sourceContext, String name) {
+        return false;
+    }
+
+    @Override
+    public boolean deleteSharedPreferences(String name) {
+        return false;
+    }
+
+    @Override
+    public FileInputStream openFileInput(String name) throws FileNotFoundException {
+        return null;
+    }
+
+    @Override
+    public FileOutputStream openFileOutput(String name, int mode) throws FileNotFoundException {
+        return null;
+    }
+
+    @Override
+    public boolean deleteFile(String name) {
+        return false;
+    }
+
+    @Override
+    public File getFileStreamPath(String name) {
+        return null;
+    }
+
+    @Override
+    public File getDataDir() {
+        return null;
+    }
+
+    @Override
+    public File getFilesDir() {
+        return null;
+    }
+
+    @Override
+    public File getNoBackupFilesDir() {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public File getExternalFilesDir(@Nullable String type) {
+        return null;
+    }
+
+    @Override
+    public File[] getExternalFilesDirs(String type) {
+        return new File[0];
+    }
+
+    @Override
+    public File getObbDir() {
+        return null;
+    }
+
+    @Override
+    public File[] getObbDirs() {
+        return new File[0];
+    }
+
+    @Override
+    public File getCacheDir() {
+        return null;
+    }
+
+    @Override
+    public File getCodeCacheDir() {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public File getExternalCacheDir() {
+        return null;
+    }
+
+    @Override
+    public File[] getExternalCacheDirs() {
+        return new File[0];
+    }
+
+    @Override
+    public File[] getExternalMediaDirs() {
+        return new File[0];
+    }
+
+    @Override
+    public String[] fileList() {
+        return new String[0];
+    }
+
+    @Override
+    public File getDir(String name, int mode) {
+        return null;
+    }
+
+    @Override
+    public SQLiteDatabase openOrCreateDatabase(String name, int mode, SQLiteDatabase.CursorFactory factory) {
+        return null;
+    }
+
+    @Override
+    public SQLiteDatabase openOrCreateDatabase(String name, int mode, SQLiteDatabase.CursorFactory factory, @Nullable DatabaseErrorHandler errorHandler) {
+        return null;
+    }
+
+    @Override
+    public boolean moveDatabaseFrom(Context sourceContext, String name) {
+        return false;
+    }
+
+    @Override
+    public boolean deleteDatabase(String name) {
+        return false;
+    }
+
+    @Override
+    public File getDatabasePath(String name) {
+        return null;
+    }
+
+    @Override
+    public String[] databaseList() {
+        return new String[0];
+    }
+
+    @Override
+    public Drawable getWallpaper() {
+        return null;
+    }
+
+    @Override
+    public Drawable peekWallpaper() {
+        return null;
+    }
+
+    @Override
+    public int getWallpaperDesiredMinimumWidth() {
+        return 0;
+    }
+
+    @Override
+    public int getWallpaperDesiredMinimumHeight() {
+        return 0;
+    }
+
+    @Override
+    public void setWallpaper(Bitmap bitmap) throws IOException {
+
+    }
+
+    @Override
+    public void setWallpaper(InputStream data) throws IOException {
+
+    }
+
+    @Override
+    public void clearWallpaper() throws IOException {
+
+    }
+
+    @Override
+    public void startActivity(Intent intent) {
+
+    }
+
+    @Override
+    public void startActivity(Intent intent, @Nullable Bundle options) {
+
+    }
+
+    @Override
+    public void startActivities(Intent[] intents) {
+
+    }
+
+    @Override
+    public void startActivities(Intent[] intents, Bundle options) {
+
+    }
+
+    @Override
+    public void startIntentSender(IntentSender intent, @Nullable Intent fillInIntent, int flagsMask, int flagsValues, int extraFlags) throws IntentSender.SendIntentException {
+
+    }
+
+    @Override
+    public void startIntentSender(IntentSender intent, @Nullable Intent fillInIntent, int flagsMask, int flagsValues, int extraFlags, @Nullable Bundle options) throws IntentSender.SendIntentException {
+
+    }
+
+    @Override
+    public void sendBroadcast(Intent intent) {
+
+    }
+
+    @Override
+    public void sendBroadcast(Intent intent, @Nullable String receiverPermission) {
+
+    }
+
+    @Override
+    public void sendOrderedBroadcast(Intent intent, @Nullable String receiverPermission) {
+
+    }
+
+    @Override
+    public void sendOrderedBroadcast(@NonNull Intent intent, @Nullable String receiverPermission, @Nullable BroadcastReceiver resultReceiver, @Nullable Handler scheduler, int initialCode, @Nullable String initialData, @Nullable Bundle initialExtras) {
+
+    }
+
+    @Override
+    public void sendBroadcastAsUser(Intent intent, UserHandle user) {
+
+    }
+
+    @Override
+    public void sendBroadcastAsUser(Intent intent, UserHandle user, @Nullable String receiverPermission) {
+
+    }
+
+    @Override
+    public void sendOrderedBroadcastAsUser(Intent intent, UserHandle user, @Nullable String receiverPermission, BroadcastReceiver resultReceiver, @Nullable Handler scheduler, int initialCode, @Nullable String initialData, @Nullable Bundle initialExtras) {
+
+    }
+
+    @Override
+    public void sendStickyBroadcast(Intent intent) {
+
+    }
+
+    @Override
+    public void sendStickyOrderedBroadcast(Intent intent, BroadcastReceiver resultReceiver, @Nullable Handler scheduler, int initialCode, @Nullable String initialData, @Nullable Bundle initialExtras) {
+
+    }
+
+    @Override
+    public void removeStickyBroadcast(Intent intent) {
+
+    }
+
+    @Override
+    public void sendStickyBroadcastAsUser(Intent intent, UserHandle user) {
+
+    }
+
+    @Override
+    public void sendStickyOrderedBroadcastAsUser(Intent intent, UserHandle user, BroadcastReceiver resultReceiver, @Nullable Handler scheduler, int initialCode, @Nullable String initialData, @Nullable Bundle initialExtras) {
+
+    }
+
+    @Override
+    public void removeStickyBroadcastAsUser(Intent intent, UserHandle user) {
+
+    }
+
+    @Nullable
+    @Override
+    public Intent registerReceiver(@Nullable BroadcastReceiver receiver, IntentFilter filter) {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public Intent registerReceiver(@Nullable BroadcastReceiver receiver, IntentFilter filter, int flags) {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter, @Nullable String broadcastPermission, @Nullable Handler scheduler) {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter, @Nullable String broadcastPermission, @Nullable Handler scheduler, int flags) {
+        return null;
+    }
+
+    @Override
+    public void unregisterReceiver(BroadcastReceiver receiver) {
+
+    }
+
+    @Nullable
+    @Override
+    public ComponentName startService(Intent service) {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public ComponentName startForegroundService(Intent service) {
+        return null;
+    }
+
+    @Override
+    public boolean stopService(Intent service) {
+        return false;
+    }
+
+    @Override
+    public boolean bindService(@NonNull Intent service, @NonNull ServiceConnection conn, int flags) {
+        return false;
+    }
+
+    @Override
+    public void unbindService(@NonNull ServiceConnection conn) {
+
+    }
+
+    @Override
+    public boolean startInstrumentation(@NonNull ComponentName className, @Nullable String profileFile, @Nullable Bundle arguments) {
+        return false;
+    }
+
+    @Override
+    public Object getSystemService(@NonNull String name) {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public String getSystemServiceName(@NonNull Class<?> serviceClass) {
+        return "";
+    }
+
+    @Override
+    public int checkPermission(@NonNull String permission, int pid, int uid) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public int checkCallingPermission(@NonNull String permission) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public int checkCallingOrSelfPermission(@NonNull String permission) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public int checkSelfPermission(@NonNull String permission) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public void enforcePermission(@NonNull String permission, int pid, int uid, @Nullable String message) {
+
+    }
+
+    @Override
+    public void enforceCallingPermission(@NonNull String permission, @Nullable String message) {
+
+    }
+
+    @Override
+    public void enforceCallingOrSelfPermission(@NonNull String permission, @Nullable String message) {
+
+    }
+
+    @Override
+    public void grantUriPermission(String toPackage, Uri uri, int modeFlags) {
+
+    }
+
+    @Override
+    public void revokeUriPermission(Uri uri, int modeFlags) {
+
+    }
+
+    @Override
+    public void revokeUriPermission(String toPackage, Uri uri, int modeFlags) {
+
+    }
+
+    @Override
+    public int checkUriPermission(Uri uri, int pid, int uid, int modeFlags) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public int checkCallingUriPermission(Uri uri, int modeFlags) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public int checkCallingOrSelfUriPermission(Uri uri, int modeFlags) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public int checkUriPermission(@Nullable Uri uri, @Nullable String readPermission, @Nullable String writePermission, int pid, int uid, int modeFlags) {
+        return PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public void enforceUriPermission(Uri uri, int pid, int uid, int modeFlags, String message) {
+
+    }
+
+    @Override
+    public void enforceCallingUriPermission(Uri uri, int modeFlags, String message) {
+
+    }
+
+    @Override
+    public void enforceCallingOrSelfUriPermission(Uri uri, int modeFlags, String message) {
+
+    }
+
+    @Override
+    public void enforceUriPermission(@Nullable Uri uri, @Nullable String readPermission, @Nullable String writePermission, int pid, int uid, int modeFlags, @Nullable String message) {
+
+    }
+
+    @Override
+    public Context createPackageContext(String packageName, int flags) throws PackageManager.NameNotFoundException {
+        return null;
+    }
+
+    @Override
+    public Context createContextForSplit(String splitName) throws PackageManager.NameNotFoundException {
+        return null;
+    }
+
+    @Override
+    public Context createConfigurationContext(@NonNull Configuration overrideConfiguration) {
+        return null;
+    }
+
+    @Override
+    public Context createDisplayContext(@NonNull Display display) {
+        return null;
+    }
+
+    @Override
+    public Context createDeviceProtectedStorageContext() {
+        return null;
+    }
+
+    @Override
+    public boolean isDeviceProtectedStorage() {
+        return false;
+    }
 
     public interface RecognitionCallback {
-        /**
-         * 当 SDK 有事件回调时调用，事件名称和数据以 JSON 格式传递给 JS 层
-         */
-        void onEvent(String event, JSONObject data);
+        void onEvent(String event, JSONObject data) throws JSONException;
         void onError(String error);
     }
 
     public AliyunNls(Context context) {
-        this.context = context;
+        this.context = context.getApplicationContext();
         nuiInstance = new NativeNui();
-        // 初始化 SDK，此处 initParams 可为空或预先构造的 JSON 字符串（见下文 initialize 方法）
-        nuiInstance.initialize(context, null, Constants.LogLevel.LOG_LEVEL_VERBOSE, true);
-        nuiInstance.setCallback(this);
-    }
-
-    public void setRecognitionCallback(RecognitionCallback callback) {
-        this.recognitionCallback = callback;
     }
 
     /**
-     * 初始化 SDK，可传入完整的 JSON 配置参数（包括鉴权信息、debug 配置等），参考 Auth.java 中的逻辑 :contentReference[oaicite:3]{index=3}
-     * @param initParams JSON 字符串，描述初始化参数
+     * 初始化方法重构：根据 Auth 类逻辑生成完整初始化参数
      */
-    public void initialize(String initParams) {
-        nuiInstance.initialize(context, initParams, Constants.LogLevel.LOG_LEVEL_VERBOSE, true);
+    public void initialize(JSONObject initParams) {
+        // 提取前端参数
+        String appKey = initParams.optString("appKey");
+        String token = initParams.optString("token");
+        String accessKey = initParams.optString("accessKey");
+        String accessSecret = initParams.optString("accessSecret");
+        String stsToken = initParams.optString("stsToken");
+        String url = initParams.optString("url", "wss://nls-gateway.cn-shanghai.aliyuncs.com:443/ws/v1");
+        debugPath = initParams.optString("debugPath");
+
+        // 设置鉴权参数
+        Auth.GetTicketMethod method = determineAuthMethod(appKey, accessKey, stsToken);
+        if (!appKey.isEmpty()) Auth.setAppKey(appKey);
+        if (!token.isEmpty()) Auth.setToken(token);
+        if (!accessKey.isEmpty()) Auth.setAccessKey(accessKey);
+        if (!accessSecret.isEmpty()) Auth.setAccessKeySecret(accessSecret);
+        if (!stsToken.isEmpty()) Auth.setStsToken(stsToken);
+
+        // 生成初始化参数
+        com.alibaba.fastjson.JSONObject authParams = Auth.getTicket(method);
+        authParams.put("device_id", "android_device");
+        authParams.put("url", url);
+        authParams.put("service_mode", Constants.ModeFullCloud);
+        if (!debugPath.isEmpty()) {
+            authParams.put("debug_path", debugPath);
+            authParams.put("save_wav", "true");
+        }
+
+        // SDK初始化
+        int ret = nuiInstance.initialize((INativeNuiCallback) context, authParams.toString(),
+            Constants.LogLevel.LOG_LEVEL_VERBOSE, true);
+
+        if (ret != Constants.NuiResultCode.SUCCESS) {
+            notifyError("Initialize failed: " + ret);
+        }
+    }
+
+    private Auth.GetTicketMethod determineAuthMethod(String appKey, String ak, String stsToken) {
+        if (!appKey.isEmpty()) {
+            if (!ak.isEmpty()) {
+                return stsToken.isEmpty() ? 
+                    Auth.GetTicketMethod.GET_ACCESS_IN_CLIENT_FOR_ONLINE_FEATURES :
+                    Auth.GetTicketMethod.GET_STS_ACCESS_IN_CLIENT_FOR_ONLINE_FEATURES;
+            }
+            if (!stsToken.isEmpty()) {
+                return Auth.GetTicketMethod.GET_TOKEN_IN_CLIENT_FOR_ONLINE_FEATURES;
+            }
+        }
+        return Auth.GetTicketMethod.GET_TOKEN_FROM_SERVER_FOR_ONLINE_FEATURES;
     }
 
     /**
-     * 开启实时识别
-     * @param nlsParams JSON 字符串，设置识别相关参数（如中间结果、标点预测、采样率等）
-     * @param dialogParams JSON 字符串，传入对话参数（可用于更新 Token 等），参考官方示例中 genDialogParams 的逻辑
+     * 增强的实时识别启动方法
      */
     public void startRealTimeRecognition(String nlsParams, String dialogParams) {
         if (isRecognizing) {
-            Log.w(TAG, "Already recognizing");
+            notifyError("Recognition already started");
             return;
         }
-        // 设置识别参数
-        nuiInstance.setParams(nlsParams);
-        int ret = nuiInstance.startDialog(Constants.VadMode.TYPE_P2T, dialogParams);
-        Log.i(TAG, "startDialog returned " + ret);
-        if (ret != Constants.NuiResultCode.SUCCESS) {
-            if (recognitionCallback != null) {
-                recognitionCallback.onError("startDialog failed with code " + ret);
-            }
-            return;
-        }
-        isRecognizing = true;
-        startAudioRecording();
-    }
 
-    /**
-     * 停止实时识别：停止 SDK 对话及音频录制
-     */
-    public void stopRealTimeRecognition() {
-        if (!isRecognizing) return;
-        nuiInstance.stopDialog();
-        stopAudioRecording();
-        isRecognizing = false;
-    }
-
-    // 音频录制：采用 AudioRecord 从麦克风获取 PCM 数据
-    private void startAudioRecording() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "RECORD_AUDIO permission not granted");
-            if (recognitionCallback != null) {
-                recognitionCallback.onError("RECORD_AUDIO permission not granted");
-            }
-            return;
-        }
-        minBufferSize = AudioRecord.getMinBufferSize(sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT);
-        audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
-                sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                minBufferSize);
-        audioRecord.startRecording();
-        audioThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                byte[] buffer = new byte[minBufferSize];
-                while (isRecognizing && !Thread.interrupted()) {
-                    // SDK 会主动调用 onNuiNeedAudioData 以获取数据，
-                    // 此处可用于额外处理或日志记录，如有需要可自行扩展
-                    int read = audioRecord.read(buffer, 0, buffer.length);
-                    if (read < 0) {
-                        Log.e(TAG, "AudioRecord read error: " + read);
-                    }
+        new Thread(() -> {
+            try {
+                nuiInstance.setParams(nlsParams);
+                int ret = nuiInstance.startDialog(Constants.VadMode.TYPE_P2T, dialogParams);
+                
+                if (ret == Constants.NuiResultCode.SUCCESS) {
+                    isRecognizing = true;
+                    startAudioCapture();
+                } else {
+                    notifyError("Start dialog failed: " + ret);
                 }
+            } catch (Exception e) {
+                notifyError("Start recognition error: " + e.getMessage());
             }
-        });
-        audioThread.start();
+        }).start();
     }
 
-    private void stopAudioRecording() {
+    private void startAudioCapture() {
+        if (audioRecord != null) return;
+
+        int sampleRate = 16000;
+        int bufferSize = AudioRecord.getMinBufferSize(
+            sampleRate, 
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        );
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        audioRecord = new AudioRecord(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            bufferSize * 2
+        );
+
+        audioRecord.startRecording();
+        isRecognizing = true;
+    }
+
+    public void stopRealTimeRecognition() {
+        new Thread(() -> {
+            try {
+                isRecognizing = false;
+                nuiInstance.stopDialog();
+                releaseAudioResources();
+            } catch (Exception e) {
+                notifyError("Stop error: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private void releaseAudioResources() {
         if (audioRecord != null) {
-            audioRecord.stop();
-            audioRecord.release();
+            try {
+                audioRecord.stop();
+                audioRecord.release();
+            } catch (IllegalStateException e) {
+                Log.e(TAG, "Audio release error", e);
+            }
             audioRecord = null;
         }
-        if (audioThread != null) {
-            audioThread.interrupt();
-            audioThread = null;
-        }
     }
 
-    // 当 SDK 需要音频数据时调用，此处直接从 AudioRecord 获取数据
     @Override
     public int onNuiNeedAudioData(byte[] buffer, int len) {
-        if (audioRecord == null) return -1;
-        int read = audioRecord.read(buffer, 0, len);
-        return read;
+        if (audioRecord == null || !isRecognizing) return -1;
+        return audioRecord.read(buffer, 0, len);
     }
 
-    // SDK 事件回调，将事件及相关数据封装成 JSON 后通知上层
     @Override
-    public void onNuiEventCallback(Constants.NuiEvent event, int resultCode, int arg2, KwsResult kwsResult, AsrResult asrResult) {
+    public void onNuiEventCallback(Constants.NuiEvent event, int code, int arg2, 
+                                  KwsResult kws, AsrResult asr) {
         try {
             JSONObject data = new JSONObject();
             data.put("event", event.name());
-            data.put("resultCode", resultCode);
-            if (asrResult != null) {
-                data.put("asrResult", asrResult.allResponse);
-            }
+            if (asr != null) data.put("result", asr.allResponse);
+            notifyEvent(event.name(), data);
+        } catch (JSONException e) {
+            Log.e(TAG, "Event parse error", e);
+        }
+    }
+
+    private void notifyEvent(String event, JSONObject data) {
+        mainHandler.post(() -> {
             if (recognitionCallback != null) {
-                // 切换到主线程通知 JS 层
-                mainHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        recognitionCallback.onEvent(event.name(), data);
-                    }
-                });
+                try {
+                    recognitionCallback.onEvent(event, data);
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
             }
-        } catch (Exception e) {
-            Log.e(TAG, "onNuiEventCallback exception: " + e.getMessage());
-        }
+        });
     }
 
-    @Override
-    public void onNuiAudioStateChanged(Constants.AudioState state) {
-        Log.i(TAG, "Audio state changed: " + state);
-        if (recognitionCallback != null) {
-            try {
-                JSONObject data = new JSONObject();
-                data.put("audioState", state.name());
-                mainHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        recognitionCallback.onEvent("AudioStateChanged", data);
-                    }
-                });
-            } catch (Exception e) {
-                Log.e(TAG, "onNuiAudioStateChanged exception: " + e.getMessage());
+    private void notifyError(String error) {
+        mainHandler.post(() -> {
+            if (recognitionCallback != null) {
+                recognitionCallback.onError(error);
             }
-        }
+        });
     }
 
-    @Override
-    public void onNuiAudioRMSChanged(float val) {
-        // 可选：返回音量变化信息
-    }
+    // 其他接口实现保持简洁
+    @Override public void onNuiAudioStateChanged(Constants.AudioState state) {}
+    @Override public void onNuiAudioRMSChanged(float val) {}
+    @Override public void onNuiVprEventCallback(Constants.NuiVprEvent event) {}
 
-    @Override
-    public void onNuiVprEventCallback(Constants.NuiVprEvent event) {
-        Log.i(TAG, "VPR event: " + event);
+    public void setRecognitionCallback(RecognitionCallback callback) {
+        this.recognitionCallback = callback;
     }
 }
