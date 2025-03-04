@@ -23,7 +23,7 @@ export class AliyunNlsWeb extends WebPlugin implements AliyunNlsPlugin {
     listenerFunc: (data: { error: string }) => void
   ): Promise<PluginListenerHandle> & PluginListenerHandle;
   // 实际实现
-  addListener(eventName: string, listenerFunc: ListenerCallback): Promise<PluginListenerHandle> & PluginListenerHandle {
+  addListener(eventName: string, _listenerFunc: ListenerCallback): Promise<PluginListenerHandle> & PluginListenerHandle {
     console.warn(`AliyunNlsWeb: addListener is not implemented on web for event "${eventName}"`);
     const result: PluginListenerHandle = {
       remove: () => Promise.resolve()
